@@ -71,6 +71,11 @@ exports.parseEvent = function(data) {
 
   data.email = data.event.Records[0].ses.mail;
   data.recipients = data.event.Records[0].ses.receipt.recipients;
+  data.log({ 
+    message: 'recipients of message:',
+    level: 'info',
+    event: JSON.stringify(data.recipients),
+  });
   return Promise.resolve(data);
 };
 
@@ -100,7 +105,19 @@ exports.transformRecipients = function(data) {
         origEmailDomain = origEmailKey.slice(pos);
         origEmailUser = origEmailKey.slice(0, pos);
       }
-      if (origEmailDomain &&
+      let forwarded = false;
+      // wildcard check before defaulting to catch all
+      if (origEmailUser) {
+        const wildcardPrefix = origEmailUser.slice(0, 2);
+        if (data.config.wildcard.hasOwnProperty(wildcardPrefix)) {
+          newRecipients = newRecipients.concat(
+            data.config.wildcard[wildcardPrefix]);
+          data.originalRecipient = origEmail;
+          forwarded = true;
+        }
+      } 
+
+      if (!forwarded && origEmailDomain &&
           data.config.forwardMapping.hasOwnProperty(origEmailDomain)) {
         newRecipients = newRecipients.concat(
           data.config.forwardMapping[origEmailDomain]);
@@ -243,6 +260,9 @@ exports.processMessage = function(data) {
   // These signatures will likely be invalid anyways, since the From
   // header was modified.
   header = header.replace(/^DKIM-Signature: .*\r?\n(\s+.*\r?\n)*/mg, '');
+
+  // log the header
+  data.log({level: "info", message: "Header after the replacements: " + header});
 
   data.emailData = header + body;
   return Promise.resolve(data);

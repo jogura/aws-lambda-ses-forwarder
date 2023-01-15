@@ -71,7 +71,7 @@ exports.parseEvent = function(data) {
 
   data.email = data.event.Records[0].ses.mail;
   data.recipients = data.event.Records[0].ses.receipt.recipients;
-  data.log({ 
+  data.log({
     message: 'recipients of message:',
     level: 'info',
     event: JSON.stringify(data.recipients),
@@ -115,7 +115,7 @@ exports.transformRecipients = function(data) {
           data.originalRecipient = origEmail;
           forwarded = true;
         }
-      } 
+      }
 
       if (!forwarded && origEmailDomain &&
           data.config.forwardMapping.hasOwnProperty(origEmailDomain)) {
@@ -203,15 +203,21 @@ exports.processMessage = function(data) {
   var body = match && match[2] ? match[2] : '';
 
   // Add "Reply-To:" with the "From" address if it doesn't already exists
-  if (!/^Reply-To: /mi.test(header)) {
-    match = header.match(/^From: (.*(?:\r?\n\s+.*)*\r?\n)/m);
+  if (!/^reply-to:[\t ]?/mi.test(header)) {
+    match = header.match(/^from:[\t ]?(.*(?:\r?\n\s+.*)*\r?\n)/mi);
     var from = match && match[1] ? match[1] : '';
     if (from) {
       header = header + 'Reply-To: ' + from;
-      data.log({level: "info", message: "Added Reply-To address of: " + from});
+      data.log({
+        level: "info",
+        message: "Added Reply-To address of: " + from
+      });
     } else {
-      data.log({level: "info", message: "Reply-To address not added because " +
-       "From address was not properly extracted."});
+      data.log({
+        level: "info",
+        message: "Reply-To address not added because From address was not " +
+          "properly extracted."
+      });
     }
   }
 

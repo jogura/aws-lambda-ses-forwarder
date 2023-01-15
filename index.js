@@ -2,7 +2,7 @@
 
 var AWS = require('aws-sdk');
 
-console.log("AWS Lambda SES Forwarder // @arithmetric // Version 4.2.0");
+console.log("AWS Lambda SES Forwarder // @arithmetric // Version 5.0.0");
 
 // Configure the S3 bucket and key prefix for stored raw emails, and the
 // mapping of email addresses to forward from and to.
@@ -18,6 +18,12 @@ console.log("AWS Lambda SES Forwarder // @arithmetric // Version 4.2.0");
 // - emailKeyPrefix: S3 key name prefix where SES stores email. Include the
 //   trailing slash.
 //
+// - allowPlusSign: Enables support for plus sign suffixes on email addresses.
+//   If set to `true`, the username/mailbox part of an email address is parsed
+//   to remove anything after a plus sign. For example, an email sent to
+//   `example+test@example.com` would be treated as if it was sent to
+//   `example@example.com`.
+//
 // - forwardMapping: Object where the key is the lowercase email address from
 //   which to forward and the value is an array of email addresses to which to
 //   send the message.
@@ -27,11 +33,14 @@ console.log("AWS Lambda SES Forwarder // @arithmetric // Version 4.2.0");
 //
 //   To match a mailbox name on all domains, use a key without the "at" symbol
 //   and domain part of an email address (i.e. `info`).
+//
+//   To match all email addresses matching no other mapping, use "@" as a key.
 var defaultConfig = {
   fromEmail: "noreply@example.com",
   subjectPrefix: "",
   emailBucket: "s3-bucket-name",
   emailKeyPrefix: "emailsPrefix/",
+  allowPlusSign: true,
   forwardMapping: {
     "info@example.com": [
       "example.john@example.com",
@@ -64,8 +73,10 @@ exports.parseEvent = function(data) {
       !data.event.Records[0].hasOwnProperty('eventSource') ||
       data.event.Records[0].eventSource !== 'aws:ses' ||
       data.event.Records[0].eventVersion !== '1.0') {
-    data.log({message: "parseEvent() received invalid SES message:",
-      level: "error", event: JSON.stringify(data.event)});
+    data.log({
+      message: "parseEvent() received invalid SES message:",
+      level: "error", event: JSON.stringify(data.event)
+    });
     return Promise.reject(new Error('Error: Received invalid SES message.'));
   }
 
@@ -91,6 +102,9 @@ exports.transformRecipients = function(data) {
   data.originalRecipients = data.recipients;
   data.recipients.forEach(function(origEmail) {
     var origEmailKey = origEmail.toLowerCase();
+    if (data.config.allowPlusSign) {
+      origEmailKey = origEmailKey.replace(/\+.*?@/, '@');
+    }
     if (data.config.forwardMapping.hasOwnProperty(origEmailKey)) {
       newRecipients = newRecipients.concat(
         data.config.forwardMapping[origEmailKey]);
@@ -127,14 +141,20 @@ exports.transformRecipients = function(data) {
         newRecipients = newRecipients.concat(
           data.config.forwardMapping[origEmailUser]);
         data.originalRecipient = origEmail;
+      } else if (data.config.forwardMapping.hasOwnProperty("@")) {
+        newRecipients = newRecipients.concat(
+          data.config.forwardMapping["@"]);
+        data.originalRecipient = origEmail;
       }
     }
   });
 
   if (!newRecipients.length) {
-    data.log({message: "Finishing process. No new recipients found for " +
-      "original destinations: " + data.originalRecipients.join(", "),
-      level: "info"});
+    data.log({
+      message: "Finishing process. No new recipients found for " +
+        "original destinations: " + data.originalRecipients.join(", "),
+      level: "info"
+    });
     return data.callback();
   }
 
@@ -151,9 +171,11 @@ exports.transformRecipients = function(data) {
  */
 exports.fetchMessage = function(data) {
   // Copying email object to ensure read permission
-  data.log({level: "info", message: "Fetching email at s3://" +
-    data.config.emailBucket + '/' + data.config.emailKeyPrefix +
-    data.email.messageId});
+  data.log({
+    level: "info",
+    message: "Fetching email at s3://" + data.config.emailBucket + '/' +
+      data.config.emailKeyPrefix + data.email.messageId
+  });
   return new Promise(function(resolve, reject) {
     data.s3.copyObject({
       Bucket: data.config.emailBucket,
@@ -165,8 +187,12 @@ exports.fetchMessage = function(data) {
       StorageClass: 'STANDARD'
     }, function(err) {
       if (err) {
-        data.log({level: "error", message: "copyObject() returned error:",
-          error: err, stack: err.stack});
+        data.log({
+          level: "error",
+          message: "copyObject() returned error:",
+          error: err,
+          stack: err.stack
+        });
         return reject(
           new Error("Error: Could not make readable copy of email."));
       }
@@ -177,8 +203,12 @@ exports.fetchMessage = function(data) {
         Key: data.config.emailKeyPrefix + data.email.messageId
       }, function(err, result) {
         if (err) {
-          data.log({level: "error", message: "getObject() returned error:",
-            error: err, stack: err.stack});
+          data.log({
+            level: "error",
+            message: "getObject() returned error:",
+            error: err,
+            stack: err.stack
+          });
           return reject(
             new Error("Error: Failed to load message body from S3."));
         }
@@ -225,7 +255,7 @@ exports.processMessage = function(data) {
   // so replace the message's "From:" header with the original
   // recipient (which is a verified domain)
   header = header.replace(
-    /^From: (.*(?:\r?\n\s+.*)*)/mg,
+    /^from:[\t ]?(.*(?:\r?\n\s+.*)*)/mgi,
     function(match, from) {
       var fromText;
       if (data.config.fromEmail) {
@@ -241,7 +271,7 @@ exports.processMessage = function(data) {
   // Add a prefix to the Subject
   if (data.config.subjectPrefix) {
     header = header.replace(
-      /^Subject: (.*)/mg,
+      /^subject:[\t ]?(.*)/mgi,
       function(match, subject) {
         return 'Subject: ' + data.config.subjectPrefix + subject;
       });
@@ -249,23 +279,23 @@ exports.processMessage = function(data) {
 
   // Replace original 'To' header with a manually defined one
   if (data.config.toEmail) {
-    header = header.replace(/^To: (.*)/mg, () => 'To: ' + data.config.toEmail);
+    header = header.replace(/^to:[\t ]?(.*)/mgi, () => 'To: ' + data.config.toEmail);
   }
 
   // Remove the Return-Path header.
-  header = header.replace(/^Return-Path: (.*)\r?\n/mg, '');
+  header = header.replace(/^return-path:[\t ]?(.*)\r?\n/mgi, '');
 
   // Remove Sender header.
-  header = header.replace(/^Sender: (.*)\r?\n/mg, '');
+  header = header.replace(/^sender:[\t ]?(.*)\r?\n/mgi, '');
 
   // Remove Message-ID header.
-  header = header.replace(/^Message-ID: (.*)\r?\n/mig, '');
+  header = header.replace(/^message-id:[\t ]?(.*)\r?\n/mgi, '');
 
   // Remove all DKIM-Signature headers to prevent triggering an
   // "InvalidParameterValue: Duplicate header 'DKIM-Signature'" error.
   // These signatures will likely be invalid anyways, since the From
   // header was modified.
-  header = header.replace(/^DKIM-Signature: .*\r?\n(\s+.*\r?\n)*/mg, '');
+  header = header.replace(/^dkim-signature:[\t ]?.*\r?\n(\s+.*\r?\n)*/mgi, '');
 
   // log the header
   data.log({level: "info", message: "Header after the replacements: " + header});
@@ -289,18 +319,28 @@ exports.sendMessage = function(data) {
       Data: data.emailData
     }
   };
-  data.log({level: "info", message: "sendMessage: Sending email via SES. " +
-    "Original recipients: " + data.originalRecipients.join(", ") +
-    ". Transformed recipients: " + data.recipients.join(", ") + "."});
+  data.log({
+    level: "info",
+    message: "sendMessage: Sending email via SES. Original recipients: " +
+      data.originalRecipients.join(", ") + ". Transformed recipients: " +
+      data.recipients.join(", ") + "."
+  });
   return new Promise(function(resolve, reject) {
     data.ses.sendRawEmail(params, function(err, result) {
       if (err) {
-        data.log({level: "error", message: "sendRawEmail() returned error.",
-          error: err, stack: err.stack});
+        data.log({
+          level: "error",
+          message: "sendRawEmail() returned error.",
+          error: err,
+          stack: err.stack
+        });
         return reject(new Error('Error: Email sending failed.'));
       }
-      data.log({level: "info", message: "sendRawEmail() successful.",
-        result: result});
+      data.log({
+        level: "info",
+        message: "sendRawEmail() successful.",
+        result: result
+      });
       resolve(data);
     });
   });
@@ -318,13 +358,13 @@ exports.sendMessage = function(data) {
  */
 exports.handler = function(event, context, callback, overrides) {
   var steps = overrides && overrides.steps ? overrides.steps :
-  [
-    exports.parseEvent,
-    exports.transformRecipients,
-    exports.fetchMessage,
-    exports.processMessage,
-    exports.sendMessage
-  ];
+    [
+      exports.parseEvent,
+      exports.transformRecipients,
+      exports.fetchMessage,
+      exports.processMessage,
+      exports.sendMessage
+    ];
   var data = {
     event: event,
     callback: callback,
@@ -337,12 +377,19 @@ exports.handler = function(event, context, callback, overrides) {
   };
   Promise.series(steps, data)
     .then(function(data) {
-      data.log({level: "info", message: "Process finished successfully."});
+      data.log({
+        level: "info",
+        message: "Process finished successfully."
+      });
       return data.callback();
     })
     .catch(function(err) {
-      data.log({level: "error", message: "Step returned error: " + err.message,
-        error: err, stack: err.stack});
+      data.log({
+        level: "error",
+        message: "Step returned error: " + err.message,
+        error: err,
+        stack: err.stack
+      });
       return data.callback(new Error("Error: Step returned error."));
     });
 };

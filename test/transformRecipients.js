@@ -19,7 +19,6 @@ describe('index.js', function() {
               ]
             }
           },
-          context: {},
           log: console.log
         };
         index.transformRecipients(data)
@@ -46,7 +45,6 @@ describe('index.js', function() {
               ]
             }
           },
-          context: {},
           log: console.log
         };
         index.transformRecipients(data)
@@ -171,6 +169,54 @@ describe('index.js', function() {
           log: console.log
         };
         index.transformRecipients(data);
+      });
+
+    it('should match plus sign email',
+      function(done) {
+        var data = {
+          recipients: ["info+testing@foo.com"],
+          config: {
+            forwardMapping: {
+              "info@foo.com": [
+                "jim@example.com"
+              ]
+            },
+            allowPlusSign: true
+          },
+          log: console.log
+        };
+        index.transformRecipients(data)
+          .then(function(data) {
+            assert.equal(data.recipients[0],
+              "jim@example.com",
+              "parseEvent made substitution");
+            done();
+          });
+      });
+
+    it('should support matching with catch all',
+      function(done) {
+        var data = {
+          recipients: ["info@example.com"],
+          config: {
+            forwardMapping: {
+              "no-match@example.com": [
+                "jim@example.com"
+              ],
+              "@": [
+                "catch-all@example.com"
+              ]
+            }
+          },
+          log: console.log
+        };
+        index.transformRecipients(data)
+          .then(function(data) {
+            assert.equal(data.recipients[0],
+              "catch-all@example.com",
+              "parseEvent made substitution");
+            done();
+          });
       });
   });
 });

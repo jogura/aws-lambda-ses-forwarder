@@ -85,7 +85,7 @@ exports.parseEvent = function(data) {
   data.log({
     message: 'recipients of message:',
     level: 'info',
-    event: JSON.stringify(data.recipients),
+    event: JSON.stringify(data.recipients)
   });
   return Promise.resolve(data);
 };
@@ -279,7 +279,8 @@ exports.processMessage = function(data) {
 
   // Replace original 'To' header with a manually defined one
   if (data.config.toEmail) {
-    header = header.replace(/^to:[\t ]?(.*)/mgi, () => 'To: ' + data.config.toEmail);
+    header =
+      header.replace(/^to:[\t ]?(.*)/mgi, () => 'To: ' + data.config.toEmail);
   }
 
   // Remove the Return-Path header.
@@ -298,7 +299,10 @@ exports.processMessage = function(data) {
   header = header.replace(/^dkim-signature:[\t ]?.*\r?\n(\s+.*\r?\n)*/mgi, '');
 
   // log the header
-  data.log({level: "info", message: "Header after the replacements: " + header});
+  data.log({
+    level: "info",
+    message: "Header after the replacements: " + header
+  });
 
   data.emailData = header + body;
   return Promise.resolve(data);
@@ -334,7 +338,31 @@ exports.sendMessage = function(data) {
           error: err,
           stack: err.stack
         });
-        return reject(new Error('Error: Email sending failed.'));
+        // attempt to write the "bad email into the emailErrorBucket"
+        data.s3.copyObject({
+          Bucket: data.config.emailErrorBucket,
+          CopySource:
+            data.config.emailBucket + '/' + data.config.emailKeyPrefix +
+            data.email.messageId,
+          Key: data.config.emailKeyPrefix + data.email.messageId,
+          ACL: 'private',
+          ContentType: 'text/plain',
+          StorageClass: 'STANDARD'
+        }, function(err) {
+          if (err) {
+            data.log({
+              level: "error",
+              message: "copyObject() returned error:",
+              error: err,
+              stack: err.stack
+            });
+            return reject(
+              new Error("Error: Could not make error copy of the rawemail. Email sending failed."));
+          }
+        });
+        return reject(
+          new Error(
+            `Error: Email sending failed. See rawEmail @ s3://${data.config.emailErrorBucket}/${data.config.emailKeyPrefix}${data.email.messageId}`));
       }
       data.log({
         level: "info",

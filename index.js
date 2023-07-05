@@ -419,7 +419,7 @@ exports.handler = function(event, context, callback, overrides) {
   var steps = overrides && overrides.steps ? overrides.steps :
     [
       exports.parseEvent,
-      exports.rejectSpam,
+      exports.filterSpam,
       exports.transformRecipients,
       exports.fetchMessage,
       exports.processMessage,

@@ -41,6 +41,7 @@ var defaultConfig = {
   emailBucket: "s3-bucket-name",
   emailKeyPrefix: "emailsPrefix/",
   allowPlusSign: true,
+  rejectSpam: true,
   forwardMapping: {
     "info@example.com": [
       "example.john@example.com",
@@ -56,6 +57,36 @@ var defaultConfig = {
       "info@example.com"
     ]
   }
+};
+
+/**
+ * Filters out SPAM emails
+ *
+ * @param {object} data - Data bundle with context, email, etc.
+ *
+ * @return {object} - Promise resolved with data.
+ */
+exports.filterSpam = function(data) {
+  const receipt = data.event.Records[0].ses.receipt;
+  if (data.config.rejectSpam && receipt) {
+    const verdicts = [
+      'spamVerdict',
+      'virusVerdict',
+      'spfVerdict',
+      'dkimVerdict',
+      'dmarcVerdict'
+    ];
+    for (let key of verdicts) {
+      const verdict = receipt[key];
+      if (verdict && verdict.status === 'FAIL') {
+        return Promise.reject(
+          new Error('Error: Email failed spam filter: ' + key)
+        );
+      }
+    }
+  }
+
+  return Promise.resolve(data);
 };
 
 /**
@@ -388,6 +419,7 @@ exports.handler = function(event, context, callback, overrides) {
   var steps = overrides && overrides.steps ? overrides.steps :
     [
       exports.parseEvent,
+      exports.rejectSpam,
       exports.transformRecipients,
       exports.fetchMessage,
       exports.processMessage,

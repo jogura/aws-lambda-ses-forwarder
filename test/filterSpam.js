@@ -58,7 +58,9 @@ describe('index.js', function() {
           event: JSON.parse(fs.readFileSync("test/assets/event.json")),
           log: console.log,
           context: {},
-          config: {rejectSpam: true}
+          config: {rejectSpam: true},
+          s3: { copyObject: () => { return true }},
+          email: { messageId: 'messageId' },
         };
         data.event.Records[0].ses.receipt.spamVerdict.status = "FAIL";
         index.filterSpam(data)
@@ -74,7 +76,9 @@ describe('index.js', function() {
           event: JSON.parse(fs.readFileSync("test/assets/event.json")),
           log: console.log,
           context: {},
-          config: {rejectSpam: true}
+          config: {rejectSpam: true},
+          s3: { copyObject: () => { return true }},
+          email: { messageId: 'messageId' },
         };
         data.event.Records[0].ses.receipt.virusVerdict.status = "FAIL";
         index.filterSpam(data)
@@ -90,7 +94,9 @@ describe('index.js', function() {
           event: JSON.parse(fs.readFileSync("test/assets/event.json")),
           log: console.log,
           context: {},
-          config: {rejectSpam: true}
+          config: {rejectSpam: true},
+          s3: { copyObject: () => { return true }},
+          email: { messageId: 'messageId' },
         };
         data.event.Records[0].ses.receipt.dkimVerdict.status = "FAIL";
         index.filterSpam(data)
@@ -106,7 +112,9 @@ describe('index.js', function() {
           event: JSON.parse(fs.readFileSync("test/assets/event.json")),
           log: console.log,
           context: {},
-          config: {rejectSpam: true}
+          config: {rejectSpam: true},
+          s3: { copyObject: () => { return true }},
+          email: { messageId: 'messageId' },
         };
         data.event.Records[0].ses.receipt.spfVerdict.status = "FAIL";
         index.filterSpam(data)

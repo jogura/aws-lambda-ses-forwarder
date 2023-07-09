@@ -39,6 +39,8 @@ var defaultConfig = {
   fromEmail: "noreply@example.com",
   subjectPrefix: "",
   emailBucket: "s3-bucket-name",
+  emailErrorBucket: "noDefault",
+  emailSpamBucket: "noDefault",
   emailKeyPrefix: "emailsPrefix/",
   allowPlusSign: true,
   rejectSpam: true,
@@ -79,12 +81,38 @@ exports.filterSpam = function(data) {
     for (let key of verdicts) {
       const verdict = receipt[key];
       if (verdict && verdict.status === 'FAIL') {
+        const emailKey = `${data.config.emailKeyPrefix}${data.email.messageId}`;
+        const sourceEmail = `${data.config.emailBucket}/${emailKey}`;
+        data.log({
+          level: "info",
+          message: `filtering spam email verdict: ${verdict} failed for email: s3://${sourceEmail}` ,
+        });
+        // attempt to write the "spam email into the emailSpamBucket"
+        data.s3.copyObject({
+          Bucket: data.config.emailSpamBucket,
+          CopySource: sourceEmail,
+          Key: emailKey,
+          ACL: 'private',
+          ContentType: 'text/plain',
+          StorageClass: 'STANDARD'
+        }, function(err) {
+          if (err) {
+            data.log({
+              level: "error",
+              message: "filterSpam - copyObject() returned error:",
+              error: err,
+              stack: err.stack
+            });
+            return Promise.reject(
+              new Error("Error: Could not make error copy of the rawemail. Email sending failed."));
+          }
+        });
         return Promise.reject(
-          new Error('Error: Email failed spam filter: ' + key)
-        );
+          new Error(
+            `Filtered Spam: See rawEmail @ s3://${data.config.emailSpamBucket}/${emailKey}`));
+        }
       }
     }
-  }
 
   return Promise.resolve(data);
 };

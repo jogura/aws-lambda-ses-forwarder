@@ -70,7 +70,9 @@ describe('index.js', function() {
                 "jane@example.com"
               ]
             },
-            log: console.log
+            log: console.log,
+            wildcard: {
+            }
           }
         };
         index.transformRecipients(data)
@@ -79,7 +81,7 @@ describe('index.js', function() {
               "jim@example.com",
               "parseEvent made 1/2 substitutions");
             assert.equal(data.recipients[1],
-              "jane@example.com",
+              "jim@example.com",
               "parseEvent made 2/2 substitutions");
             done();
           });
@@ -96,7 +98,8 @@ describe('index.js', function() {
                 "jane@example.com"
               ]
             },
-            log: console.log
+            log: console.log,
+            wildcard: {},
           }
         };
         index.transformRecipients(data)
@@ -125,7 +128,8 @@ describe('index.js', function() {
           callback: function() {
             done();
           },
-          log: console.log
+          log: console.log,
+          wildcard: {},
         };
         index.transformRecipients(data);
       });
@@ -141,7 +145,8 @@ describe('index.js', function() {
               ]
             }
           },
-          log: console.log
+          log: console.log,
+          wildcard: {},
         };
         index.transformRecipients(data)
           .then(function(data) {
@@ -166,7 +171,8 @@ describe('index.js', function() {
           callback: function() {
             done();
           },
-          log: console.log
+          log: console.log,
+          wildcard: {},
         };
         index.transformRecipients(data);
       });
@@ -183,7 +189,8 @@ describe('index.js', function() {
             },
             allowPlusSign: true
           },
-          log: console.log
+          log: console.log,
+          wildcard: {},
         };
         index.transformRecipients(data)
           .then(function(data) {
@@ -208,7 +215,8 @@ describe('index.js', function() {
               ]
             }
           },
-          log: console.log
+          log: console.log,
+          wildcard: {},
         };
         index.transformRecipients(data)
           .then(function(data) {

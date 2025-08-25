@@ -201,6 +201,46 @@ Check the configuration of the rules.
 in CloudWatch. Click on "Logs" in the CloudWatch menu, and you should find a log
 group for the Lambda function.
 
+
+## How the Code Works (For AWS Beginners)
+
+This project uses several AWS services to automatically forward emails:
+
+1. **AWS Simple Email Service (SES):**  
+   SES receives emails sent to your domain. You configure SES to deliver these emails to an S3 bucket and trigger a Lambda function.
+
+2. **Amazon S3:**  
+   SES stores each received email as a file in an S3 bucket. This bucket acts as temporary storage for incoming messages.
+
+3. **AWS Lambda:**  
+   The Lambda function runs the code in this project. When a new email arrives in S3, Lambda is triggered. The function:
+   - Reads the email from S3.
+   - Modifies the email headers so it can be forwarded (due to SES restrictions).
+   - Sends the email to the destination address using SES.
+
+4. **IAM Roles and Permissions:**  
+   AWS Identity and Access Management (IAM) controls what each service can do. The Lambda function needs permission to read from S3, send emails with SES, and write logs.
+
+### Typical Flow
+
+1. Someone sends an email to your domain.
+2. SES receives the email and saves it to S3.
+3. S3 triggers the Lambda function.
+4. Lambda reads the email, updates headers, and forwards it using SES.
+
+### Why Use This Approach?
+
+- No need to run or manage your own email server.
+- You only pay for what you use (serverless).
+- AWS handles scaling and reliability.
+
+### Getting Started
+
+- Verify your domain and email addresses in SES.
+- Set up S3 and Lambda as described above.
+- Configure IAM roles so Lambda can access S3 and SES.
+- Update the forwarding rules in the code to match your needs.
+
 ## Credits
 
 Based on the work of @eleven41 and @mwhouser from:
